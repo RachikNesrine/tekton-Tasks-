@@ -1,0 +1,48 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: argocd-task-sync-and-wait
+spec:
+  params:
+    - name: application-name
+      type: string
+    - name: revision
+      type: string
+      default: HEAD
+    - name: flags
+      type: string
+      default: "--"
+    - name: argocd-version
+      type: string
+      default: v2.9.11
+
+  stepTemplate:
+    envFrom:
+      - configMapRef:
+          name: argocd-env-configmap
+      - secretRef:
+          name: argocd-env-secret
+
+  steps:
+    - name: sync-and-wait
+      image: quay.io/argoproj/argocd:$(params.argocd-version)
+      env:
+        - name: HOME
+          value: /home/argocd
+      script: |
+        #!/usr/bin/env sh
+        set -e
+
+        if [ -z "$ARGOCD_AUTH_TOKEN" ]; then
+          yes | argocd login "$ARGOCD_SERVER" \
+            --username="$ARGOCD_USERNAME" \
+            --password="$ARGOCD_PASSWORD"
+        fi
+
+        argocd app sync "$(params.application-name)" \
+          --revision "$(params.revision)" \
+          "$(params.flags)"
+
+        argocd app wait "$(params.application-name)" \
+          --health \
+          "$(params.flags)"
