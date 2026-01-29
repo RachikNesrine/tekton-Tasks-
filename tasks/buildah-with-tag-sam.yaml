@@ -1,0 +1,108 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: buildah-with-tag-sam
+spec:
+  description: >
+    Buildah task builds source into a container image and pushes it to a registry.
+
+  params:
+    - name: IMAGE
+      type: string
+      default: registry.gitlab.com/mromdhani/my-docker-registry
+    - name: IMAGE_TAG
+      type: string
+      default: latest
+    - name: BRANCH
+      type: string
+      default: dev
+    - name: BUILDER_IMAGE
+      type: string
+      default: quay.io/buildah/stable:v1.39.3
+    - name: STORAGE_DRIVER
+      type: string
+      default: vfs
+    - name: DOCKERFILE
+      type: string
+      default: ./Dockerfile
+    - name: CONTEXT
+      type: string
+      default: .
+    - name: TLSVERIFY
+      type: string
+      default: "true"
+    - name: FORMAT
+      type: string
+      default: oci
+    - name: BUILD_EXTRA_ARGS
+      type: string
+      default: ""
+    - name: PUSH_EXTRA_ARGS
+      type: string
+      default: ""
+    - name: SKIP_PUSH
+      type: string
+      default: "false"
+
+  results:
+    - name: IMAGE_DIGEST
+      description: Digest of the image just built.
+
+  workspaces:
+    - name: source
+    - name: sslcertdir
+      optional: true
+
+  volumes:
+    - name: varlibcontainers
+      emptyDir: {}
+
+  steps:
+    - name: build
+      image: $(params.BUILDER_IMAGE)
+      workingDir: $(workspaces.source.path)
+      securityContext:
+        runAsUser: 1000
+      volumeMounts:
+        - name: varlibcontainers
+          mountPath: /var/lib/containers
+      script: |
+        #!/usr/bin/env sh
+        set -e
+
+        TARGET_ENVIRONMENT="stg"
+        if echo "$(params.BRANCH)" | grep -Eq '^(develop|feature)'; then
+          TARGET_ENVIRONMENT="dev"
+        elif echo "$(params.BRANCH)" | grep -Eq '^(release|hotfix)'; then
+          TARGET_ENVIRONMENT="stg"
+        elif [ "$(params.BRANCH)" = "main" ] || [ "$(params.BRANCH)" = "master" ]; then
+          TARGET_ENVIRONMENT="prd"
+        fi
+
+        IMAGE_FULL="$(params.IMAGE)/${TARGET_ENVIRONMENT}:$(params.IMAGE_TAG)"
+        echo "Building ${IMAGE_FULL}"
+
+        buildah --storage-driver=$(params.STORAGE_DRIVER) bud \
+          --build-arg TARGET_ENVIRONMENT=${TARGET_ENVIRONMENT} \
+          $(params.BUILD_EXTRA_ARGS) \
+          --format=$(params.FORMAT) \
+          --tls-verify=$(params.TLSVERIFY) \
+          -f $(params.DOCKERFILE) \
+          -t ${IMAGE_FULL} \
+          $(params.CONTEXT)
+
+        if [ "$(params.SKIP_PUSH)" = "true" ]; then
+          echo "Push skipped"
+          exit 0
+        fi
+
+        buildah push \
+          $(params.PUSH_EXTRA_ARGS) \
+          --tls-verify=$(params.TLSVERIFY) \
+          --digestfile $(workspaces.source.path)/image-digest \
+          ${IMAGE_FULL}
+
+    - name: digest-to-results
+      image: $(params.BUILDER_IMAGE)
+      script: |
+        cat $(workspaces.source.path)/image-digest > $(results.IMAGE_DIGEST.path)
