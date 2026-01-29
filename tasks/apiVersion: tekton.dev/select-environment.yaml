@@ -1,1 +1,36 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: select-environment
+spec:
+  params:
+    - name: branch
+      type: string
+  results:
+    - name: environment
+      description: Selected environment
+  steps:
+    - name: select
+      image: alpine:3.19
+      env:
+        - name: PARAM_BRANCH
+          value: $(params.branch)
+      script: |
+        #!/bin/sh
+        set -e
+
+        echo "BRANCH: $PARAM_BRANCH"
+
+        ENVIRONMENT="dev"
+
+        if echo "$PARAM_BRANCH" | grep -Eq '^(release|hotfix)'; then
+          ENVIRONMENT="stg"
+        fi
+
+        if echo "$PARAM_BRANCH" | grep -Eq '^(main|master)'; then
+          ENVIRONMENT="prd"
+        fi
+
+        echo "SELECTED ENVIRONMENT: $ENVIRONMENT"
+        printf "%s" "$ENVIRONMENT" > "$(results.environment.path)"
 
