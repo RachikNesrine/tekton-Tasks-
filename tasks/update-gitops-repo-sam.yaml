@@ -1,0 +1,81 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: update-gitops-repo-sam
+spec:
+  params:
+    - name: BRANCH
+      type: string
+      default: dev
+    - name: GITOPS_REPO_SSH_LOCATION
+      type: string
+    - name: GITOPS_REPO_SSH_REVISION
+      type: string
+      default: toto
+    - name: DEPLOYMENT_DIRECTORY
+      type: string
+    - name: DEPLOYMENT_FILE
+      type: string
+    - name: IMAGE_BASE_NAME
+      type: string
+    - name: VERBOSE
+      type: string
+      default: "true"
+    - name: USER_HOME
+      type: string
+      default: /root
+
+  results:
+    - name: commit
+      description: Commit SHA after updating GitOps repo.
+
+  workspaces:
+    - name: source
+    - name: gitops
+    - name: basic-auth
+      optional: true
+    - name: ssh-directory
+      optional: true
+
+  steps:
+    - name: push-changes-gitops
+      image: ghcr.io/tektoncd/github.com/tektoncd/pipeline/cmd/git-init:v0.40.2
+      workingDir: $(workspaces.gitops.path)
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+      script: |
+        #!/usr/bin/env sh
+        set -eu
+
+        if [ "$(params.VERBOSE)" = "true" ]; then
+          set -x
+        fi
+
+        git clone -b $(params.GITOPS_REPO_SSH_REVISION) \
+          $(params.GITOPS_REPO_SSH_LOCATION) gitops
+        cd gitops
+
+        source $(workspaces.source.path)/revision.txt
+
+        TARGET_ENV="stg"
+        if echo "$(params.BRANCH)" | grep -Eq '^(develop|feature)'; then
+          TARGET_ENV="dev"
+        elif echo "$(params.BRANCH)" | grep -Eq '^(release|hotfix)'; then
+          TARGET_ENV="stg"
+        elif [ "$(params.BRANCH)" = "main" ] || [ "$(params.BRANCH)" = "master" ]; then
+          TARGET_ENV="prd"
+        fi
+
+        NEW_IMAGE="$(params.IMAGE_BASE_NAME)/${TARGET_ENV}:${REVISION}"
+        sed -i "s#image: .*#image: ${NEW_IMAGE}#" \
+          $(params.DEPLOYMENT_DIRECTORY)/${TARGET_ENV}/$(params.DEPLOYMENT_FILE)
+
+        git config user.email "tekton@local"
+        git config user.name "tekton-bot"
+
+        git add .
+        git commit --allow-empty -m "[tekton] updating deployment"
+        git push origin $(params.GITOPS_REPO_SSH_REVISION)
+
+        git rev-parse HEAD > $(results.commit.path)
