@@ -8,58 +8,16 @@ spec:
       type: string
     - name: revision
       type: string
-      default: ""
-
-  results:
-    - name: commit
+      default: main
 
   workspaces:
-    - name: output
-    - name: ssh-directory
-      optional: true
-    - name: basic-auth
-      optional: true
+    - name: source
 
   steps:
     - name: clone
-      image: ghcr.io/tektoncd/github.com/tektoncd/pipeline/cmd/git-init:v0.40.2
-      env:
-        - name: HOME
-          value: /home/git
-        - name: WORKSPACE_OUTPUT_PATH
-          value: $(workspaces.output.path)
-        - name: WORKSPACE_SSH_BOUND
-          value: $(workspaces.ssh-directory.bound)
-        - name: WORKSPACE_SSH_PATH
-          value: $(workspaces.ssh-directory.path)
-        - name: WORKSPACE_BASIC_AUTH_BOUND
-          value: $(workspaces.basic-auth.bound)
-        - name: WORKSPACE_BASIC_AUTH_PATH
-          value: $(workspaces.basic-auth.path)
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 65532
+      image: alpine/git:2.43.0
       script: |
-        #!/usr/bin/env sh
+        #!/bin/sh
         set -eu
-
-        if [ "${WORKSPACE_BASIC_AUTH_BOUND}" = "true" ]; then
-          cp "${WORKSPACE_BASIC_AUTH_PATH}/.git-credentials" "${HOME}/.git-credentials"
-          cp "${WORKSPACE_BASIC_AUTH_PATH}/.gitconfig" "${HOME}/.gitconfig"
-          chmod 400 "${HOME}/.git-credentials" "${HOME}/.gitconfig"
-        fi
-
-        if [ "${WORKSPACE_SSH_BOUND}" = "true" ]; then
-          cp -R "${WORKSPACE_SSH_PATH}" "${HOME}/.ssh"
-          chmod 700 "${HOME}/.ssh"
-          chmod -R 400 "${HOME}/.ssh/"*
-        fi
-
-        /ko-app/git-init \
-          -url="$(params.url)" \
-          -revision="$(params.revision)" \
-          -path="${WORKSPACE_OUTPUT_PATH}"
-
-        cd "${WORKSPACE_OUTPUT_PATH}"
-        git rev-parse HEAD > "$(results.commit.path)"
-
+        git clone "$(params.url)" .
+        git checkout "$(params.revision)"
