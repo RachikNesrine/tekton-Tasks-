@@ -6,7 +6,6 @@ metadata:
     app.kubernetes.io/version: "0.9"
   annotations:
     tekton.dev/pipelines.minVersion: "0.38.0"
-    tekton.dev/categories: Git
     tekton.dev/tags: git
     tekton.dev/displayName: "git clone"
     tekton.dev/platforms: "linux/amd64,linux/s390x,linux/ppc64le,linux/arm64"
@@ -163,9 +162,9 @@ spec:
         CHECKOUT_DIR="${WORKSPACE_SOURCE_PATH}/${PARAM_SUBDIRECTORY}"
 
         if [ "${PARAM_DELETE_EXISTING}" = "true" ] && [ -d "${CHECKOUT_DIR}" ]; then
-          rm -rf "${CHECKOUT_DIR:?}"/*
-          rm -rf "${CHECKOUT_DIR}"/.[!.]*
-          rm -rf "${CHECKOUT_DIR}"/..?*
+          rm -rf "${CHECKOUT_DIR:?}"/* 2>/dev/null || true
+          rm -rf "${CHECKOUT_DIR}"/.[!.]* 2>/dev/null || true
+          rm -rf "${CHECKOUT_DIR}"/..?* 2>/dev/null || true
         fi
 
         test -z "${PARAM_HTTP_PROXY}" || export HTTP_PROXY="${PARAM_HTTP_PROXY}"
