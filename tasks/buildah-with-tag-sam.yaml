@@ -70,7 +70,6 @@ spec:
         #!/usr/bin/env sh
         set -e
 
-        
         pwd
         ls -l
 
@@ -100,12 +99,11 @@ spec:
           exit 0
         fi
 
-        buildah push \
+        buildah --storage-driver=$(params.STORAGE_DRIVER) push \
           $(params.PUSH_EXTRA_ARGS) \
           --tls-verify=$(params.TLSVERIFY) \
           --digestfile $(workspaces.source.path)/image-digest \
           ${IMAGE_FULL}
-
 
     - name: digest-to-results
       image: $(params.BUILDER_IMAGE)
