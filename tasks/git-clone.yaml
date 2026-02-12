@@ -188,3 +188,5 @@ spec:
         git rev-parse HEAD > "$(results.commit.path)"
         git log -1 --pretty=%ct > "$(results.committer-date.path)"
         printf "%s" "${PARAM_URL}" > "$(results.url.path)"
+        pwd
+        ls -l
