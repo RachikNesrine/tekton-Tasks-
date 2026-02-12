@@ -70,6 +70,10 @@ spec:
         #!/usr/bin/env sh
         set -e
 
+        
+        pwd
+        ls -l
+
         TARGET_ENVIRONMENT="stg"
         if echo "$(params.BRANCH)" | grep -Eq '^(develop|feature)'; then
           TARGET_ENVIRONMENT="dev"
@@ -102,8 +106,6 @@ spec:
           --digestfile $(workspaces.source.path)/image-digest \
           ${IMAGE_FULL}
 
-        pwd
-        ls -l
 
     - name: digest-to-results
       image: $(params.BUILDER_IMAGE)
